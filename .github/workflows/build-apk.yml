@@ -12,95 +12,32 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Extract ZIP & Auto-Fix All Sources
+      - name: Auto-extract ZIP & Auto-patch
         run: |
           if [ ! -f "settings.gradle.kts" ] && [ ! -f "ThongKeDonHang/settings.gradle.kts" ]; then
             ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
             if [ -n "$ZIP_FILE" ]; then
               unzip -q -o "$ZIP_FILE" -d .
             else
-              echo "### ❌ Lỗi: Chưa có file ZIP trong kho chứa!" >> $GITHUB_STEP_SUMMARY
+              echo "::error::Chua co file ZIP trong kho chua! Hay bam Add file -> Upload files -> chon file ZIP va bam Commit changes."
               exit 1
             fi
           fi
-          python3 - << 'PYEOF'
-          import os
-          root = "ThongKeDonHang" if os.path.exists("ThongKeDonHang/settings.gradle.kts") else "."
-
-          # 1. Bo sung import SoftCreamSurface trong OrderCommonComponents.kt
-          comp = os.path.join(root, "app/src/main/java/vn/thongkedonhang/app/ui/components/OrderCommonComponents.kt")
-          if os.path.exists(comp):
-              t = open(comp, encoding="utf-8").read()
-              if "import vn.thongkedonhang.app.ui.theme.SoftCreamSurface" not in t:
-                  t = t.replace(
-                      "import vn.thongkedonhang.app.ui.theme.PrimaryYellowDark",
-                      "import vn.thongkedonhang.app.ui.theme.PrimaryYellowDark\nimport vn.thongkedonhang.app.ui.theme.SoftCreamSurface"
-                  )
-              open(comp, "w", encoding="utf-8").write(t)
-
-          # 2. Sua @OptIn trong CameraBarcodeScanner.kt
-          cam = os.path.join(root, "app/src/main/java/vn/thongkedonhang/app/ui/components/CameraBarcodeScanner.kt")
-          if os.path.exists(cam):
-              t = open(cam, encoding="utf-8").read()
-              t = t.replace("import androidx.annotation.OptIn\n", "")
-              t = t.replace("@OptIn(ExperimentalGetImage::class)", "@androidx.annotation.OptIn(ExperimentalGetImage::class)")
-              open(cam, "w", encoding="utf-8").write(t)
-
-          # 3. Tach combine 6 luong thanh 2 nhom 3 luong trong MainViewModel.kt
-          vm = os.path.join(root, "app/src/main/java/vn/thongkedonhang/app/ui/MainViewModel.kt")
-          if os.path.exists(vm):
-              t = open(vm, encoding="utf-8").read()
-              old_c = """    val filteredOrderList: StateFlow<List<OrderItem>> = combine(
-        ordersForSelectedDate,
-        ordersInReportRange,
-        allOrders,
-        _searchSuffixQuery,
-        _searchScopeMode,
-        _statusFilter
-    ) { arr ->
-        @Suppress("UNCHECKED_CAST")
-        val daily = arr[0] as List<OrderItem>
-        @Suppress("UNCHECKED_CAST")
-        val range = arr[1] as List<OrderItem>
-        @Suppress("UNCHECKED_CAST")
-        val all = arr[2] as List<OrderItem>
-        val suffix = (arr[3] as String).trim()
-        val scope = arr[4] as SearchScopeMode
-        val status = arr[5] as OrderStatus?"""
-              new_c = """    private val _orderListsBundle = combine(
-        ordersForSelectedDate,
-        ordersInReportRange,
-        allOrders
-    ) { daily, range, all -> Triple(daily, range, all) }
-
-    private val _filterCriteriaBundle = combine(
-        _searchSuffixQuery,
-        _searchScopeMode,
-        _statusFilter
-    ) { suffix, scope, status -> Triple(suffix.trim(), scope, status) }
-
-    val filteredOrderList: StateFlow<List<OrderItem>> = combine(
-        _orderListsBundle,
-        _filterCriteriaBundle
-    ) { lists, criteria ->
-        val (daily, range, all) = lists
-        val (suffix, scope, status) = criteria"""
-              if old_c in t:
-                  t = t.replace(old_c, new_c)
-                  open(vm, "w", encoding="utf-8").write(t)
-
-          # 4. Cau hinh app/build.gradle.kts tuong thich Room DefaultImpls
-          bg = os.path.join(root, "app/build.gradle.kts")
-          if os.path.exists(bg):
-              t = open(bg, encoding="utf-8").read()
-              t = t.replace('\n        freeCompilerArgs += listOf("-Xjvm-default=all")', '')
-              if "lint {" not in t:
-                  t = t.replace(
-                      "buildFeatures {\n        compose = true\n    }",
-                      "buildFeatures {\n        compose = true\n    }\n    lint {\n        abortOnError = false\n        checkReleaseBuilds = false\n    }"
-                  )
-              open(bg, "w", encoding="utf-8").write(t)
-          PYEOF
+          if [ -d "ThongKeDonHang" ] && [ -f "ThongKeDonHang/settings.gradle.kts" ]; then
+            cd ThongKeDonHang
+          fi
+          COMP_FILE="app/src/main/java/vn/thongkedonhang/app/ui/components/OrderCommonComponents.kt"
+          if [ -f "$COMP_FILE" ] && ! grep -q "import vn.thongkedonhang.app.ui.theme.SoftCreamSurface" "$COMP_FILE"; then
+            sed -i 's/import vn.thongkedonhang.app.ui.theme.PrimaryYellowDark/import vn.thongkedonhang.app.ui.theme.PrimaryYellowDark\nimport vn.thongkedonhang.app.ui.theme.SoftCreamSurface/' "$COMP_FILE"
+          fi
+          CAM_FILE="app/src/main/java/vn/thongkedonhang/app/ui/components/CameraBarcodeScanner.kt"
+          if [ -f "$CAM_FILE" ]; then
+            sed -i '/import androidx.annotation.OptIn/d' "$CAM_FILE"
+            sed -i 's/@OptIn(ExperimentalGetImage::class)/@androidx.annotation.OptIn(ExperimentalGetImage::class)/g' "$CAM_FILE"
+          fi
+          if [ -f "app/build.gradle.kts" ] && ! grep -q "Xjvm-default=all" "app/build.gradle.kts"; then
+            sed -i 's/jvmTarget = "17"/jvmTarget = "17"\n        freeCompilerArgs += listOf("-Xjvm-default=all")/' "app/build.gradle.kts"
+          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -108,30 +45,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle 8.7 (Bypass Cache Error)
+      - name: Setup Gradle 8.7
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.7'
-          cache-disabled: true
 
-      - name: Build Debug APK
+      - name: Build Debug & Release APK
         run: |
           if [ -d "ThongKeDonHang" ] && [ -f "ThongKeDonHang/settings.gradle.kts" ]; then
             cd ThongKeDonHang
           fi
-          set +e
-          gradle assembleDebug --stacktrace > build_output.log 2>&1
-          EXIT_CODE=$?
-          cat build_output.log
-          if [ $EXIT_CODE -ne 0 ]; then
-            echo "### ❌ Chi tiết lỗi biên dịch Gradle:" >> $GITHUB_STEP_SUMMARY
-            echo '```text' >> $GITHUB_STEP_SUMMARY
-            grep -E "(^e: |FAILURE:|What went wrong:|^\* |Exception|Error:)" -A 6 build_output.log | head -n 80 >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            exit $EXIT_CODE
-          else
-            echo "### ✅ Đã tạo file APK thành công! Kéo xuống mục Artifacts để tải ThongKeDonHang-debug-apk." >> $GITHUB_STEP_SUMMARY
-          fi
+          gradle testDebugUnitTest assembleDebug assembleRelease --stacktrace
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4

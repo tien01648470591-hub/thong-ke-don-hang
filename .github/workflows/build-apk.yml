@@ -12,13 +12,31 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Auto-extract ZIP
+      - name: Auto-extract ZIP & Auto-patch
         run: |
           if [ ! -f "settings.gradle.kts" ] && [ ! -f "ThongKeDonHang/settings.gradle.kts" ]; then
             ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
             if [ -n "$ZIP_FILE" ]; then
               unzip -q -o "$ZIP_FILE" -d .
+            else
+              echo "::error::Chua co file ZIP trong kho chua! Hay bam Add file -> Upload files -> chon file ZIP va bam Commit changes."
+              exit 1
             fi
+          fi
+          if [ -d "ThongKeDonHang" ] && [ -f "ThongKeDonHang/settings.gradle.kts" ]; then
+            cd ThongKeDonHang
+          fi
+          COMP_FILE="app/src/main/java/vn/thongkedonhang/app/ui/components/OrderCommonComponents.kt"
+          if [ -f "$COMP_FILE" ] && ! grep -q "import vn.thongkedonhang.app.ui.theme.SoftCreamSurface" "$COMP_FILE"; then
+            sed -i 's/import vn.thongkedonhang.app.ui.theme.PrimaryYellowDark/import vn.thongkedonhang.app.ui.theme.PrimaryYellowDark\nimport vn.thongkedonhang.app.ui.theme.SoftCreamSurface/' "$COMP_FILE"
+          fi
+          CAM_FILE="app/src/main/java/vn/thongkedonhang/app/ui/components/CameraBarcodeScanner.kt"
+          if [ -f "$CAM_FILE" ]; then
+            sed -i '/import androidx.annotation.OptIn/d' "$CAM_FILE"
+            sed -i 's/@OptIn(ExperimentalGetImage::class)/@androidx.annotation.OptIn(ExperimentalGetImage::class)/g' "$CAM_FILE"
+          fi
+          if [ -f "app/build.gradle.kts" ] && ! grep -q "Xjvm-default=all" "app/build.gradle.kts"; then
+            sed -i 's/jvmTarget = "17"/jvmTarget = "17"\n        freeCompilerArgs += listOf("-Xjvm-default=all")/' "app/build.gradle.kts"
           fi
 
       - name: Set up JDK 17
@@ -32,7 +50,7 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build APK
+      - name: Build Debug & Release APK
         run: |
           if [ -d "ThongKeDonHang" ] && [ -f "ThongKeDonHang/settings.gradle.kts" ]; then
             cd ThongKeDonHang

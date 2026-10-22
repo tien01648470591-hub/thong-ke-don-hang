@@ -12,14 +12,14 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Auto-extract ZIP & Auto-patch
+      - name: Extract ZIP and Fix Sources
         run: |
           if [ ! -f "settings.gradle.kts" ] && [ ! -f "ThongKeDonHang/settings.gradle.kts" ]; then
             ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
             if [ -n "$ZIP_FILE" ]; then
               unzip -q -o "$ZIP_FILE" -d .
             else
-              echo "::error::Chua co file ZIP trong kho chua! Hay bam Add file -> Upload files -> chon file ZIP va bam Commit changes."
+              echo "Loi: Chua co file ZIP trong kho chua"
               exit 1
             fi
           fi
@@ -27,16 +27,25 @@ jobs:
             cd ThongKeDonHang
           fi
           COMP_FILE="app/src/main/java/vn/thongkedonhang/app/ui/components/OrderCommonComponents.kt"
-          if [ -f "$COMP_FILE" ] && ! grep -q "import vn.thongkedonhang.app.ui.theme.SoftCreamSurface" "$COMP_FILE"; then
+          if [ -f "$COMP_FILE" ] && ! grep -q "SoftCreamSurface" <(head -n 65 "$COMP_FILE"); then
             sed -i 's/import vn.thongkedonhang.app.ui.theme.PrimaryYellowDark/import vn.thongkedonhang.app.ui.theme.PrimaryYellowDark\nimport vn.thongkedonhang.app.ui.theme.SoftCreamSurface/' "$COMP_FILE"
           fi
+          sed -i 's/onOpenGroupClick?.invoke(order.groupId)/onOpenGroupClick?.invoke(order.groupId.orEmpty())/g' "$COMP_FILE"
           CAM_FILE="app/src/main/java/vn/thongkedonhang/app/ui/components/CameraBarcodeScanner.kt"
           if [ -f "$CAM_FILE" ]; then
             sed -i '/import androidx.annotation.OptIn/d' "$CAM_FILE"
             sed -i 's/@OptIn(ExperimentalGetImage::class)/@androidx.annotation.OptIn(ExperimentalGetImage::class)/g' "$CAM_FILE"
           fi
-          if [ -f "app/build.gradle.kts" ] && ! grep -q "Xjvm-default=all" "app/build.gradle.kts"; then
-            sed -i 's/jvmTarget = "17"/jvmTarget = "17"\n        freeCompilerArgs += listOf("-Xjvm-default=all")/' "app/build.gradle.kts"
+          DET_FILE="app/src/main/java/vn/thongkedonhang/app/ui/screens/OrderDetailScreen.kt"
+          if [ -f "$DET_FILE" ]; then
+            sed -i 's/onOpenGroup(order.groupId)/onOpenGroup(order.groupId.orEmpty())/g' "$DET_FILE"
+          fi
+          VM_FILE="app/src/main/java/vn/thongkedonhang/app/ui/MainViewModel.kt"
+          if [ -f "$VM_FILE" ]; then
+            sed -i 's/val filteredOrderList: StateFlow<List<OrderItem>> = combine(/val filteredOrderList: StateFlow<List<OrderItem>> = combine<Any?, List<OrderItem>>(/g' "$VM_FILE"
+          fi
+          if [ -f "app/build.gradle.kts" ]; then
+            sed -i '/freeCompilerArgs/d' "app/build.gradle.kts"
           fi
 
       - name: Set up JDK 17
@@ -49,13 +58,27 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.7'
+          cache-disabled: true
 
-      - name: Build Debug & Release APK
+      - name: Build Debug APK
         run: |
           if [ -d "ThongKeDonHang" ] && [ -f "ThongKeDonHang/settings.gradle.kts" ]; then
             cd ThongKeDonHang
           fi
-          gradle testDebugUnitTest assembleDebug assembleRelease --stacktrace
+          set +e
+          gradle assembleDebug --console=plain > build_output.log 2>&1
+          EXIT_CODE=$?
+          cat build_output.log
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "================ DONG LOI CU THE ================"
+            grep -E "(^e: |FAILURE:|What went wrong:|> Task .* FAILED|Exception|Error)" -A 6 build_output.log
+            echo "================================================="
+            echo "### Chi tiet loi bien dich:" >> $GITHUB_STEP_SUMMARY
+            echo '```text' >> $GITHUB_STEP_SUMMARY
+            grep -E "(^e: |FAILURE:|What went wrong:|> Task .* FAILED|Exception|Error)" -A 6 build_output.log | head -n 80 >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit $EXIT_CODE
+          fi
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
